@@ -8,7 +8,6 @@ license = "Unlicense"
 readme = "README.md"
 homepage = "https://codeberg.org/valpackett/secstr"
 repository = "https://codeberg.org/valpackett/secstr"
-documentation = "https://myfreeweb.github.io/autodocs/secstr/secstr"
 
 [lib]
 name = "secstr"
