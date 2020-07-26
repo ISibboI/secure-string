@@ -9,6 +9,7 @@ readme = "README.md"
 homepage = "https://codeberg.org/valpackett/secstr"
 repository = "https://codeberg.org/valpackett/secstr"
 documentation = "https://docs.rs/secstr/"
+edition = "2018"
 
 [lib]
 name = "secstr"
