@@ -1,7 +1,6 @@
 [![crates.io](https://img.shields.io/crates/v/secstr.svg)](https://crates.io/crates/secstr)
 [![API Docs](https://docs.rs/secstr/badge.svg)](https://docs.rs/secstr/)
-[![Build Status](https://img.shields.io/travis/myfreeweb/secstr.svg?style=flat)](https://travis-ci.org/myfreeweb/secstr)
-[![unlicense](https://img.shields.io/badge/un-license-green.svg?style=flat)](http://unlicense.org)
+[![unlicense](https://img.shields.io/badge/un-license-green.svg?style=flat)](https://unlicense.org)
 
 # secstr
 
@@ -29,7 +28,6 @@ Featuring:
 ## Usage
 
 ```rust
-extern crate secstr;
 use secstr::*;
 
 let pw = SecStr::from("correct horse battery staple");
@@ -53,15 +51,7 @@ assert_eq!(my_sec.unsecure(), b"");
 Be careful with `SecStr::from`: if you have a borrowed string, it will be copied.  
 Use `SecStr::new` if you have a `Vec<u8>`.
 
-## Contributing
-
-Please feel free to submit pull requests!
-
-By participating in this project you agree to follow the [Contributor Code of Conduct](http://contributor-covenant.org/version/1/4/) and to release your contributions under the Unlicense.
-
-[The list of contributors is available on GitHub](https://codeberg.org/valpackett/secstr/graphs/contributors).
-
 ## License
 
 This is free and unencumbered software released into the public domain.  
-For more information, please refer to the `UNLICENSE` file or [unlicense.org](http://unlicense.org).
+For more information, please refer to the `UNLICENSE` file or [unlicense.org](https://unlicense.org).
