@@ -9,3 +9,4 @@ pipeline:
     - rustup target add i686-unknown-freebsd aarch64-pc-windows-msvc
     - cargo check --target i686-unknown-freebsd
     - cargo check --target aarch64-pc-windows-msvc
+    - cargo fmt --check
