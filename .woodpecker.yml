@@ -1,0 +1,10 @@
+pipeline:
+  test:
+    image: rust:alpine
+    pull: true
+    commands:
+    - apk add musl-dev
+    - RUST_BACKTRACE=1 cargo test -- --nocapture
+    - rustup target add i686-unknown-freebsd aarch64-pc-windows-msvc
+    - cargo check --target i686-unknown-freebsd
+    - cargo check --target aarch64-pc-windows-msvc
