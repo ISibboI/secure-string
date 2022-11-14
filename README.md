@@ -1,5 +1,6 @@
 [![crates.io](https://img.shields.io/crates/v/secstr.svg)](https://crates.io/crates/secstr)
 [![API Docs](https://docs.rs/secstr/badge.svg)](https://docs.rs/secstr/)
+[![CI status](https://ci.codeberg.org/api/badges/valpackett/secstr/status.svg)](https://ci.codeberg.org/valpackett/secstr)
 [![unlicense](https://img.shields.io/badge/un-license-green.svg?style=flat)](https://unlicense.org)
 
 # secstr
