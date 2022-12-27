@@ -298,9 +298,9 @@ mod memlock {
 
 #[cfg(not(unix))]
 mod memlock {
-    pub fn mlock<T: Sized>(cont: *mut T, count: usize) {}
+    pub fn mlock<T: Sized>(_cont: *mut T, _count: usize) {}
 
-    pub fn munlock<T: Sized>(cont: *mut T, count: usize) {}
+    pub fn munlock<T: Sized>(_cont: *mut T, _count: usize) {}
 }
 
 mod private {
