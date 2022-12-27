@@ -5,22 +5,23 @@
 
 # secstr
 
-A [Rust] library that implements a data type (wrapper around `Vec<u8>`) suitable for storing sensitive information such as passwords and private keys in memory.
+A [Rust] library that implements a data type (wrapper around `Vec<u8>` and other types) suitable for storing sensitive information such as passwords and private keys in memory.
 Inspired by Haskell [securemem] and .NET [SecureString].
 
 Featuring:
 
 - constant time comparison (does not short circuit on the first different character; but terminates instantly if strings have different length)
-- automatically zeroing out in the destructor
+- automatically zeroing out in the destructor using [zeroize]
 - `mlock` and `madvise` protection if possible
 - formatting as `***SECRET***` to prevent leaking into logs
-- (optionally) using libsodium (through [sodiumoxide]'s [libsodium-sys]) for zeroing, comparison, and hashing (`std::hash::Hash`)
+- (optionally) using libsodium (through [sodiumoxide]'s [libsodium-sys]) for comparison, and hashing (`std::hash::Hash`)
 - (optionally) de/serializable into anything [Serde] supports as a byte string
 - (optionally) compile-time checked [preconditions] for the public `unsafe` API
 
 [Rust]: https://www.rust-lang.org
 [securemem]: https://hackage.haskell.org/package/securemem
 [SecureString]: http://msdn.microsoft.com/en-us/library/system.security.securestring%28v=vs.110%29.aspx
+[zeroize]: https://crates.io/crates/zeroize
 [sodiumoxide]: https://crates.io/crates/sodiumoxide
 [libsodium-sys]: https://crates.io/crates/libsodium-sys
 [Serde]: https://serde.rs/

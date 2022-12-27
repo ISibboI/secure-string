@@ -7,8 +7,10 @@ use serde::{
 use std::{
     borrow::{Borrow, BorrowMut},
     fmt,
+    mem::MaybeUninit,
     str::FromStr,
 };
+use zeroize::Zeroize;
 
 /**
  * Obtain the number of bytes stored in the given byte slice
@@ -31,16 +33,6 @@ mod mem {
     extern crate libsodium_sys as sodium;
     use crate::size_of;
     use std;
-
-    #[cfg_attr(
-        any(test, feature = "pre"),
-        pre::pre(valid_ptr(ptr, w)),
-        pre::pre("`ptr` points to a single allocation that is valid for at least `count` bytes"),
-        pre::pre(count <= std::isize::MAX as usize)
-    )]
-    pub unsafe fn zero(ptr: *mut u8, count: usize) {
-        sodium::sodium_memzero(ptr as *mut _, count);
-    }
 
     #[inline(never)]
     #[cfg_attr(
@@ -124,49 +116,6 @@ mod mem {
 #[cfg(not(feature = "libsodium-sys"))]
 mod mem {
     use std;
-
-    #[cfg_attr(
-        any(test, feature = "pre"),
-        pre::pre(valid_ptr(ptr, w)),
-        pre::pre("`ptr` points to a single allocation that is valid for at least `count` bytes"),
-        pre::pre(count <= std::isize::MAX as usize)
-    )]
-    #[inline(never)]
-    pub unsafe fn zero(ptr: *mut u8, count: usize) {
-        for i in 0..count {
-            #[cfg_attr(
-                any(test, feature = "pre"),
-                forward(impl pre::std::mut_pointer),
-                assure(
-                    "the starting and the resulting pointer are in bounds of the same allocated object",
-                    reason = "this is guaranteed by the precondition to this function"
-                ),
-                assure(
-                    "the computed offset, in bytes, does not overflow an `isize`",
-                    reason = "`computed offset <= count <= isize::MAX`"
-                ),
-                assure(
-                    "performing the offset does not result in overflow",
-                    reason = "a single allocation does not rely on overflow to index all elements and `i as isize >= 0`"
-                )
-            )]
-            let offset_ptr = ptr.offset(i as isize);
-
-            #[cfg_attr(
-                any(test, feature = "pre"),
-                forward(pre),
-                assure(
-                    valid_ptr(dst, w),
-                    reason = "the call to offset above produced a valid pointer into the allocation"
-                ),
-                assure(
-                    proper_align(dst),
-                    reason = "`align_of::<*mut u8>() == 1` and any pointer has an alignment of `1`"
-                )
-            )]
-            std::ptr::write_volatile(offset_ptr, 0);
-        }
-    }
 
     #[inline(never)]
     #[cfg_attr(
@@ -480,14 +429,14 @@ impl<'de> serde::Deserialize<'de> for SecUtf8 {
 /// Use `SecStr::new` if you have a `Vec<u8>`.
 pub struct SecVec<T>
 where
-    T: Sized + Copy,
+    T: Sized + Copy + Zeroize,
 {
     content: Vec<T>,
 }
 
 impl<T> SecVec<T>
 where
-    T: Sized + Copy,
+    T: Sized + Copy + Zeroize,
 {
     pub fn new(mut cont: Vec<T>) -> Self {
         memlock::mlock(cont.as_mut_ptr(), cont.capacity());
@@ -533,51 +482,12 @@ where
     /// Overwrite the string with zeros. This is automatically called in the destructor.
     ///
     /// This also sets the length to `0`.
-    #[cfg_attr(any(test, feature = "pre"), pre::pre)]
     pub fn zero_out(&mut self) {
-        // We zero the entire capacity, not just the currently initialized capacity
-        let num_bytes = self.content.capacity() * std::mem::size_of::<T>();
-
-        // We can set the length to zero without worrying about dropping, because `T: Copy` and
-        // `Copy` types cannot implement `Drop`.
-        #[cfg_attr(
-            any(test, feature = "pre"),
-            forward(impl pre::std::vec::Vec),
-            assure(
-                new_len <= self.capacity(),
-                reason = "`0` is smaller or equal to any `usize` and `self.capacity()` is a `usize`"
-            ),
-            assure(
-                "the elements at `old_len..new_len` are initialized",
-                reason = "`new_len <= old_len`, so `old_len..new_len` is an empty range"
-            )
-        )]
-        unsafe {
-            self.content.set_len(0)
-        };
-
-        #[cfg_attr(
-            any(test, feature = "pre"),
-            assure(
-                valid_ptr(ptr, w),
-                reason = "the vector is a valid pointer or has length zero and any pointer is valid for zero bytes"
-            ),
-            assure(
-                "`ptr` points to a single allocation that is valid for at least `count` bytes",
-                reason = "a vector always points to a single allocation and `count` is the size of the allocation in bytes"
-            ),
-            assure(
-                count <= std::isize::MAX as usize,
-                reason = "a vector never allocates more than `isize::MAX` elements"
-            )
-        )]
-        unsafe {
-            mem::zero(self.content.as_mut_ptr() as *mut u8, num_bytes)
-        };
+        self.content.zeroize()
     }
 }
 
-impl<T: Copy> Clone for SecVec<T> {
+impl<T: Copy + Zeroize> Clone for SecVec<T> {
     fn clone(&self) -> Self {
         Self::new(self.content.clone())
     }
@@ -587,7 +497,7 @@ impl<T: Copy> Clone for SecVec<T> {
 impl<T, U> From<U> for SecVec<T>
 where
     U: Into<Vec<T>>,
-    T: Sized + Copy,
+    T: Sized + Copy + Zeroize,
 {
     fn from(s: U) -> SecVec<T> {
         SecVec::new(s.into())
@@ -605,7 +515,7 @@ impl FromStr for SecVec<u8> {
 // Vec item indexing
 impl<T, U> std::ops::Index<U> for SecVec<T>
 where
-    T: Sized + Copy,
+    T: Sized + Copy + Zeroize,
     Vec<T>: std::ops::Index<U>,
 {
     type Output = <Vec<T> as std::ops::Index<U>>::Output;
@@ -618,7 +528,7 @@ where
 // Borrowing
 impl<T> Borrow<[T]> for SecVec<T>
 where
-    T: Sized + Copy,
+    T: Sized + Copy + Zeroize,
 {
     fn borrow(&self) -> &[T] {
         self.content.borrow()
@@ -627,7 +537,7 @@ where
 
 impl<T> BorrowMut<[T]> for SecVec<T>
 where
-    T: Sized + Copy,
+    T: Sized + Copy + Zeroize,
 {
     fn borrow_mut(&mut self) -> &mut [T] {
         self.content.borrow_mut()
@@ -637,7 +547,7 @@ where
 // Overwrite memory with zeros when we're done
 impl<T> Drop for SecVec<T>
 where
-    T: Sized + Copy,
+    T: Sized + Copy + Zeroize,
 {
     fn drop(&mut self) {
         self.zero_out();
@@ -648,7 +558,7 @@ where
 // Constant time comparison
 impl<T> PartialEq for SecVec<T>
 where
-    T: Sized + Copy + NoPaddingBytes,
+    T: Sized + Copy + Zeroize + NoPaddingBytes,
 {
     #[cfg_attr(any(test, feature = "pre"), pre::pre)]
     fn eq(&self, other: &SecVec<T>) -> bool {
@@ -694,12 +604,12 @@ where
     }
 }
 
-impl<T> Eq for SecVec<T> where T: Sized + Copy + NoPaddingBytes {}
+impl<T> Eq for SecVec<T> where T: Sized + Copy + Zeroize + NoPaddingBytes {}
 
 // Make sure sensitive information is not logged accidentally
 impl<T> fmt::Debug for SecVec<T>
 where
-    T: Sized + Copy,
+    T: Sized + Copy + Zeroize,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("***SECRET***").map_err(|_| fmt::Error)
@@ -708,7 +618,7 @@ where
 
 impl<T> fmt::Display for SecVec<T>
 where
-    T: Sized + Copy,
+    T: Sized + Copy + Zeroize,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("***SECRET***").map_err(|_| fmt::Error)
@@ -821,22 +731,11 @@ pub unsafe fn zero_out_secbox<T>(secbox: &mut SecBox<T>)
 where
     T: Sized + Copy,
 {
-    #[cfg_attr(
-        any(test, feature = "pre"),
-        assure(
-            valid_ptr(ptr, w),
-            reason = "`ptr` comes from a valid box, which is guaranteed to be a valid pointer"
-        ),
-        assure(
-            "`ptr` points to a single allocation that is valid for at least `count` bytes",
-            reason = "a `Box<T>` points to an allocation of at least `mem::size_of::<T>()` bytes"
-        ),
-        assure(
-            count <= std::isize::MAX as usize,
-            reason = "`mem::size_of::<T>()` cannot return a value larger than `isize::MAX`"
-        )
-    )]
-    mem::zero(&mut **secbox.content.as_mut().unwrap() as *mut T as *mut u8, std::mem::size_of::<T>());
+    std::slice::from_raw_parts_mut::<MaybeUninit<u8>>(
+        &mut **secbox.content.as_mut().unwrap() as *mut T as *mut MaybeUninit<u8>,
+        std::mem::size_of::<T>(),
+    )
+    .zeroize();
 }
 
 // Delegate indexing
@@ -885,24 +784,10 @@ where
         // There is no need to worry about dropping the contents, because `T: Copy` and `Copy`
         // types cannot implement `Drop`
 
-        #[cfg_attr(
-            any(test, feature = "pre"),
-            assure(
-                valid_ptr(ptr, w),
-                reason = "`ptr` comes from a valid box, which is guaranteed to be a valid pointer"
-            ),
-            assure(
-                "`ptr` points to a single allocation that is valid for at least `count` bytes",
-                reason = "a `Box<T>` points to an allocation of at least `mem::size_of::<T>()` bytes"
-            ),
-            assure(
-                count <= std::isize::MAX as usize,
-                reason = "`mem::size_of::<T>()` cannot return a value larger than `isize::MAX`"
-            )
-        )]
         unsafe {
-            mem::zero(ptr as *mut u8, std::mem::size_of::<T>())
-        };
+            std::slice::from_raw_parts_mut::<MaybeUninit<u8>>(ptr as *mut MaybeUninit<u8>, std::mem::size_of::<T>()).zeroize();
+        }
+
         memlock::munlock(ptr, std::mem::size_of::<T>());
 
         // Deallocate only non-zero-sized types, because otherwise it's UB
