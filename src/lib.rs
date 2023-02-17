@@ -700,7 +700,7 @@ where
     T: Sized + Copy,
 {
     pub fn new(mut cont: Box<T>) -> Self {
-        memlock::mlock(&mut cont, std::mem::size_of::<T>());
+        memlock::mlock(&mut cont, 1);
         SecBox { content: Some(cont) }
     }
 
@@ -788,7 +788,7 @@ where
             std::slice::from_raw_parts_mut::<MaybeUninit<u8>>(ptr as *mut MaybeUninit<u8>, std::mem::size_of::<T>()).zeroize();
         }
 
-        memlock::munlock(ptr, std::mem::size_of::<T>());
+        memlock::munlock(ptr, 1);
 
         // Deallocate only non-zero-sized types, because otherwise it's UB
         if std::mem::size_of::<T>() != 0 {
