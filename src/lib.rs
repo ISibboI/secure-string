@@ -633,13 +633,33 @@ impl<'de> Visitor<'de> for BytesVisitor {
     type Value = SecVec<u8>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("a byte array")
+        formatter.write_str("a byte array or a sequence of bytes")
     }
 
     fn visit_bytes<E>(self, value: &[u8]) -> Result<SecVec<u8>, E>
     where
         E: de::Error,
     {
+        Ok(SecStr::from(value))
+    }
+
+    fn visit_byte_buf<E>(self, value: Vec<u8>) -> Result<SecVec<u8>, E>
+    where
+        E: de::Error,
+    {
+        Ok(SecStr::from(value))
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<SecVec<u8>, A::Error>
+    where
+        A: de::SeqAccess<'de>,
+    {
+        let mut value: Vec<u8> = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+
+        while let Some(element) = seq.next_element()? {
+            value.push(element);
+        }
+
         Ok(SecStr::from(value))
     }
 }
@@ -1038,5 +1058,18 @@ mod tests {
         assert_eq!(my_cbor, b"\x45hello");
         let my_sec2 = from_slice(&my_cbor).unwrap();
         assert_eq!(my_sec, my_sec2);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_serde_json() {
+        let secure_bytes = SecVec::from("abc".as_bytes());
+
+        let json = serde_json::to_string_pretty(secure_bytes.unsecure()).unwrap();
+        println!("json = {json}");
+
+        let secure_bytes_serde: SecVec<u8> = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(secure_bytes, secure_bytes_serde);
     }
 }
