@@ -1,6 +1,7 @@
 # Secure String
 
-[![crates.io](https://img.shields.io/crates/v/secure-string?logo=rust)![crates.io](https://img.shields.io/crates/d/secure-string)](https://crates.io/crates/secure-string)
+[![crates.io](https://img.shields.io/crates/v/secure-string?logo=rust)](https://crates.io/crates/secure-string)
+[![crates.io](https://img.shields.io/crates/d/secure-string)](https://crates.io/crates/secure-string)
 [![API Docs](https://docs.rs/secure-string/badge.svg)](https://docs.rs/secure-string/)
 [![unlicense](https://img.shields.io/badge/un-license-green.svg?style=flat)](https://unlicense.org)
 
