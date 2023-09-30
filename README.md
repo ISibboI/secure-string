@@ -11,7 +11,6 @@ Inspired by Haskell [securemem] and .NET [SecureString].
 Featuring:
 
 - Supports various secure datatypes: `SecureVec`, `SecureBytes`, `SecureArray`, `SecureString`, `SecureBox`
-- timing-attack-resistant comparison (does not short circuit on the first different character; but terminates instantly if strings have different length)
 - automatically zeroing out in the destructor using [zeroize]
 - `mlock` and `madvise` protection if possible
 - formatting as `***SECRET***` to prevent leaking into logs

@@ -6,10 +6,7 @@ use std::{
 
 use zeroize::Zeroize;
 
-use crate::{
-    secure_utils::{memlock, timing_attack_proof_cmp},
-    NoPaddingBytes,
-};
+use crate::secure_utils::memlock;
 
 /// A data type suitable for storing sensitive information such as passwords and private keys in memory, that implements:
 ///
@@ -20,16 +17,17 @@ use crate::{
 /// - Automatic `madvise(MADV_NOCORE/MADV_DONTDUMP)` to protect against leaking into core dumps (FreeBSD, DragonflyBSD, Linux)
 ///
 /// Comparisons using the `PartialEq` implementation are undefined behavior (and most likely wrong) if `T` has any padding bytes.
+#[derive(Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub struct SecureArray<T, const LENGTH: usize>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     pub(crate) content: [T; LENGTH],
 }
 
 impl<T, const LENGTH: usize> SecureArray<T, LENGTH>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     pub fn new(mut content: [T; LENGTH]) -> Self {
         memlock::mlock(content.as_mut_ptr(), content.len());
@@ -61,7 +59,7 @@ impl<T: Copy + Zeroize, const LENGTH: usize> Clone for SecureArray<T, LENGTH> {
 // Creation
 impl<T, const LENGTH: usize> From<[T; LENGTH]> for SecureArray<T, LENGTH>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     fn from(s: [T; LENGTH]) -> Self {
         Self::new(s)
@@ -70,7 +68,7 @@ where
 
 impl<T, const LENGTH: usize> TryFrom<Vec<T>> for SecureArray<T, LENGTH>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     type Error = String;
 
@@ -92,7 +90,7 @@ impl<const LENGTH: usize> FromStr for SecureArray<u8, LENGTH> {
 // Array item indexing
 impl<T, U, const LENGTH: usize> std::ops::Index<U> for SecureArray<T, LENGTH>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
     [T; LENGTH]: std::ops::Index<U>,
 {
     type Output = <[T; LENGTH] as std::ops::Index<U>>::Output;
@@ -105,7 +103,7 @@ where
 // Borrowing
 impl<T, const LENGTH: usize> Borrow<[T]> for SecureArray<T, LENGTH>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     fn borrow(&self) -> &[T] {
         self.content.borrow()
@@ -114,7 +112,7 @@ where
 
 impl<T, const LENGTH: usize> BorrowMut<[T]> for SecureArray<T, LENGTH>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     fn borrow_mut(&mut self) -> &mut [T] {
         self.content.borrow_mut()
@@ -124,7 +122,7 @@ where
 // Overwrite memory with zeros when we're done
 impl<T, const LENGTH: usize> Drop for SecureArray<T, LENGTH>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     fn drop(&mut self) {
         self.zero_out();
@@ -132,61 +130,10 @@ where
     }
 }
 
-// Constant time comparison
-impl<T, const LENGTH: usize> PartialEq for SecureArray<T, LENGTH>
-where
-    T: Sized + Copy + Zeroize + NoPaddingBytes,
-{
-    #[cfg_attr(feature = "pre", pre::pre)]
-    fn eq(&self, other: &SecureArray<T, LENGTH>) -> bool {
-        #[cfg_attr(
-            feature = "pre",
-            assure(
-                valid_ptr(us, r),
-                reason = "`us` is created from a reference"
-            ),
-            assure(
-                "`us` points to a single allocated object of initialized `u8` values that is valid for `us_len` bytes",
-                reason = "`T` has no padding bytes, because of the `NoPaddingBytes` bound and all other bytes are initialized,
-                because all elements in an array are initialized. They also all belong to a single allocation big enough to hold
-                at least `array.len()` elements of `T`."
-            ),
-            assure(
-                us_len <= isize::MAX as usize,
-                reason = "a slice is never larger than `isize::MAX` bytes"
-            ),
-            assure(
-                valid_ptr(them, r),
-                reason = "`them` is created from a reference"
-            ),
-            assure(
-                "`them` points to a single allocated object of initialized `u8` values that is valid for `them_len` bytes",
-                reason = "`T` has no padding bytes, because of the `NoPaddingBytes` bound and all other bytes are initialized,
-                because all elements in an array are initialized. They also all belong to a single allocation big enough to hold
-                at least `array.len()` elements of `T`."
-            ),
-            assure(
-                them_len <= isize::MAX as usize,
-                reason = "a slice is never larger than `isize::MAX` bytes"
-            )
-        )]
-        unsafe {
-            timing_attack_proof_cmp(
-                self.content.as_ptr() as *const u8,
-                self.content.len() * std::mem::size_of::<T>(),
-                other.content.as_ptr() as *const u8,
-                other.content.len() * std::mem::size_of::<T>(),
-            )
-        }
-    }
-}
-
-impl<T, const LENGTH: usize> Eq for SecureArray<T, LENGTH> where T: Sized + Copy + Zeroize + NoPaddingBytes {}
-
 // Make sure sensitive information is not logged accidentally
 impl<T, const LENGTH: usize> fmt::Debug for SecureArray<T, LENGTH>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("***SECRET***").map_err(|_| fmt::Error)
@@ -195,7 +142,7 @@ where
 
 impl<T, const LENGTH: usize> fmt::Display for SecureArray<T, LENGTH>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("***SECRET***").map_err(|_| fmt::Error)

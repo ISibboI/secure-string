@@ -6,10 +6,7 @@ use std::{
 
 use zeroize::Zeroize;
 
-use crate::{
-    secure_utils::{memlock, timing_attack_proof_cmp},
-    NoPaddingBytes,
-};
+use crate::secure_utils::memlock;
 
 /// A data type suitable for storing sensitive information such as passwords and private keys in memory, that implements:
 ///
@@ -23,9 +20,10 @@ use crate::{
 ///
 /// Be careful with `SecureBytes::from`: if you have a borrowed string, it will be copied.
 /// Use `SecureBytes::new` if you have a `Vec<u8>`.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SecureVec<T>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     pub(crate) content: Vec<T>,
 }
@@ -35,7 +33,7 @@ pub type SecureBytes = SecureVec<u8>;
 
 impl<T> SecureVec<T>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     pub fn new(mut cont: Vec<T>) -> Self {
         memlock::mlock(cont.as_mut_ptr(), cont.capacity());
@@ -96,7 +94,7 @@ impl<T: Copy + Zeroize> Clone for SecureVec<T> {
 impl<T, U> From<U> for SecureVec<T>
 where
     U: Into<Vec<T>>,
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     fn from(s: U) -> SecureVec<T> {
         SecureVec::new(s.into())
@@ -114,7 +112,7 @@ impl FromStr for SecureVec<u8> {
 // Vec item indexing
 impl<T, U> std::ops::Index<U> for SecureVec<T>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
     Vec<T>: std::ops::Index<U>,
 {
     type Output = <Vec<T> as std::ops::Index<U>>::Output;
@@ -127,7 +125,7 @@ where
 // Borrowing
 impl<T> Borrow<[T]> for SecureVec<T>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     fn borrow(&self) -> &[T] {
         self.content.borrow()
@@ -136,7 +134,7 @@ where
 
 impl<T> BorrowMut<[T]> for SecureVec<T>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     fn borrow_mut(&mut self) -> &mut [T] {
         self.content.borrow_mut()
@@ -146,7 +144,7 @@ where
 // Overwrite memory with zeros when we're done
 impl<T> Drop for SecureVec<T>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     fn drop(&mut self) {
         self.zero_out();
@@ -154,61 +152,10 @@ where
     }
 }
 
-// Constant time comparison
-impl<T> PartialEq for SecureVec<T>
-where
-    T: Sized + Copy + Zeroize + NoPaddingBytes,
-{
-    #[cfg_attr(feature = "pre", pre::pre)]
-    fn eq(&self, other: &SecureVec<T>) -> bool {
-        #[cfg_attr(
-            feature = "pre",
-            assure(
-                valid_ptr(us, r),
-                reason = "`us` is created from a reference"
-            ),
-            assure(
-                "`us` points to a single allocated object of initialized `u8` values that is valid for `us_len` bytes",
-                reason = "`T` has no padding bytes, because of the `NoPaddingBytes` bound and all other bytes are initialized,
-                because all elements in a vec are initialized. They also all belong to a single allocation big enough to hold
-                at least `vec.len()` elements of `T`."
-            ),
-            assure(
-                us_len <= isize::MAX as usize,
-                reason = "a slice is never larger than `isize::MAX` bytes"
-            ),
-            assure(
-                valid_ptr(them, r),
-                reason = "`them` is created from a reference"
-            ),
-            assure(
-                "`them` points to a single allocated object of initialized `u8` values that is valid for `them_len` bytes",
-                reason = "`T` has no padding bytes, because of the `NoPaddingBytes` bound and all other bytes are initialized,
-                because all elements in a vec are initialized. They also all belong to a single allocation big enough to hold
-                at least `vec.len()` elements of `T`."
-            ),
-            assure(
-                them_len <= isize::MAX as usize,
-                reason = "a slice is never larger than `isize::MAX` bytes"
-            )
-        )]
-        unsafe {
-            timing_attack_proof_cmp(
-                self.content.as_ptr() as *const u8,
-                self.content.len() * std::mem::size_of::<T>(),
-                other.content.as_ptr() as *const u8,
-                other.content.len() * std::mem::size_of::<T>(),
-            )
-        }
-    }
-}
-
-impl<T> Eq for SecureVec<T> where T: Sized + Copy + Zeroize + NoPaddingBytes {}
-
 // Make sure sensitive information is not logged accidentally
 impl<T> fmt::Debug for SecureVec<T>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("***SECRET***").map_err(|_| fmt::Error)
@@ -217,7 +164,7 @@ where
 
 impl<T> fmt::Display for SecureVec<T>
 where
-    T: Sized + Copy + Zeroize,
+    T: Copy + Zeroize,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("***SECRET***").map_err(|_| fmt::Error)

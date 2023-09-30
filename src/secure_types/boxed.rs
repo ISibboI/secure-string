@@ -6,10 +6,7 @@ use std::{
 
 use zeroize::Zeroize;
 
-use crate::{
-    secure_utils::{memlock, timing_attack_proof_cmp},
-    NoPaddingBytes,
-};
+use crate::secure_utils::memlock;
 
 /// A data type suitable for storing sensitive information such as passwords and private keys in memory, that implements:
 ///
@@ -20,9 +17,10 @@ use crate::{
 /// - Automatic `madvise(MADV_NOCORE/MADV_DONTDUMP)` to protect against leaking into core dumps (FreeBSD, DragonflyBSD, Linux)
 ///
 /// Comparisons using the `PartialEq` implementation are undefined behavior (and most likely wrong) if `T` has any padding bytes.
+#[derive(Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub struct SecureBox<T>
 where
-    T: Sized + Copy,
+    T: Copy,
 {
     // This is an `Option` to avoid UB in the destructor, outside the destructor, it is always
     // `Some(_)`
@@ -31,7 +29,7 @@ where
 
 impl<T> SecureBox<T>
 where
-    T: Sized + Copy,
+    T: Copy,
 {
     pub fn new(mut cont: Box<T>) -> Self {
         memlock::mlock(&mut cont, 1);
@@ -58,7 +56,7 @@ impl<T: Copy> Clone for SecureBox<T> {
 // Delegate indexing
 impl<T, U> std::ops::Index<U> for SecureBox<T>
 where
-    T: std::ops::Index<U> + Sized + Copy,
+    T: std::ops::Index<U> + Copy,
 {
     type Output = <T as std::ops::Index<U>>::Output;
 
@@ -70,7 +68,7 @@ where
 // Borrowing
 impl<T> Borrow<T> for SecureBox<T>
 where
-    T: Sized + Copy,
+    T: Copy,
 {
     fn borrow(&self) -> &T {
         self.content.as_ref().unwrap()
@@ -78,7 +76,7 @@ where
 }
 impl<T> BorrowMut<T> for SecureBox<T>
 where
-    T: Sized + Copy,
+    T: Copy,
 {
     fn borrow_mut(&mut self) -> &mut T {
         self.content.as_mut().unwrap()
@@ -88,7 +86,7 @@ where
 // Overwrite memory with zeros when we're done
 impl<T> Drop for SecureBox<T>
 where
-    T: Sized + Copy,
+    T: Copy,
 {
     #[cfg_attr(feature = "pre", pre::pre)]
     fn drop(&mut self) {
@@ -118,61 +116,10 @@ where
     }
 }
 
-// Constant time comparison
-impl<T> PartialEq for SecureBox<T>
-where
-    T: Sized + Copy + NoPaddingBytes,
-{
-    #[cfg_attr(feature = "pre", pre::pre)]
-    fn eq(&self, other: &SecureBox<T>) -> bool {
-        #[cfg_attr(
-            feature = "pre",
-            assure(
-                valid_ptr(us, r),
-                reason = "`us` is created from a reference"
-            ),
-            assure(
-                "`us` points to a single allocated object of initialized `u8` values that is valid for `us_len` bytes",
-                reason = "`T` has no padding bytes, because of the `NoPaddingBytes` bound and all other bytes are initialized,
-                because all elements in a vec are initialized. They also all belong to a single allocation big enough to hold
-                at least `vec.len()` elements of `T`."
-            ),
-            assure(
-                us_len <= isize::MAX as usize,
-                reason = "`mem::size_of::<T>()` is never larger than `isize::MAX` bytes"
-            ),
-            assure(
-                valid_ptr(them, r),
-                reason = "`them` is created from a reference"
-            ),
-            assure(
-                "`them` points to a single allocated object of initialized `u8` values that is valid for `them_len` bytes",
-                reason = "`T` has no padding bytes, because of the `NoPaddingBytes` bound and all other bytes are initialized,
-                because all elements in a vec are initialized. They also all belong to a single allocation big enough to hold
-                at least `vec.len()` elements of `T`."
-            ),
-            assure(
-                them_len <= isize::MAX as usize,
-                reason = "`mem::size_of::<T>()` is never larger than `isize::MAX` bytes"
-            )
-        )]
-        unsafe {
-            timing_attack_proof_cmp(
-                &**self.content.as_ref().unwrap() as *const T as *const u8,
-                std::mem::size_of::<T>(),
-                &**other.content.as_ref().unwrap() as *const T as *const u8,
-                std::mem::size_of::<T>(),
-            )
-        }
-    }
-}
-
-impl<T> Eq for SecureBox<T> where T: Sized + Copy + NoPaddingBytes {}
-
 // Make sure sensitive information is not logged accidentally
 impl<T> fmt::Debug for SecureBox<T>
 where
-    T: Sized + Copy,
+    T: Copy,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("***SECRET***").map_err(|_| fmt::Error)
@@ -181,7 +128,7 @@ where
 
 impl<T> fmt::Display for SecureBox<T>
 where
-    T: Sized + Copy,
+    T: Copy,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("***SECRET***").map_err(|_| fmt::Error)
@@ -214,7 +161,7 @@ mod tests {
     #[cfg_attr(feature = "pre", pre::pre("an all-zero byte-pattern is a valid value of `T`"))]
     pub(crate) unsafe fn zero_out_secure_box<T>(secure_box: &mut SecureBox<T>)
     where
-        T: Sized + Copy,
+        T: Copy,
     {
         std::slice::from_raw_parts_mut::<MaybeUninit<u8>>(
             &mut **secure_box.content.as_mut().unwrap() as *mut T as *mut MaybeUninit<u8>,
