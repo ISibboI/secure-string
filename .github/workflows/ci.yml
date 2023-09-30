@@ -67,7 +67,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        toolchain: [null, "stable", "beta", "nightly"]
+        toolchain: ["stable", "beta", "nightly"]
         features: ["", "--all-features"]
 
     steps:
