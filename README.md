@@ -10,13 +10,15 @@ Inspired by Haskell [securemem] and .NET [SecureString].
 
 Featuring:
 
-- Various secure datatypes: `SecureVec`, `SecureBytes`, `SecureArray`, `SecureString`, `SecureBox`
+- Supports various secure datatypes: `SecureVec`, `SecureBytes`, `SecureArray`, `SecureString`, `SecureBox`
 - timing-attack-resistant comparison (does not short circuit on the first different character; but terminates instantly if strings have different length)
 - automatically zeroing out in the destructor using [zeroize]
 - `mlock` and `madvise` protection if possible
 - formatting as `***SECRET***` to prevent leaking into logs
 - (optionally) de/serializable into anything [Serde] supports as a byte string
 - (optionally) compile-time checked [preconditions] for the public `unsafe` API
+
+This crate is based on [`secstr`](https://crates.io/crates/secstr) by Val Packett, but modified to be a bit more rusty and versatile.
 
 [Rust]: https://www.rust-lang.org
 [securemem]: https://hackage.haskell.org/package/securemem
