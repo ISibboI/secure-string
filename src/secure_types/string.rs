@@ -9,10 +9,10 @@ pub struct SecureString(SecureVec<u8>);
 
 impl SecureString {
     /// Borrow the contents of the string.
-    #[cfg_attr(any(test, feature = "pre"), pre::pre)]
+    #[cfg_attr(feature = "pre", pre::pre)]
     pub fn unsecure(&self) -> &str {
         #[cfg_attr(
-            any(test, feature = "pre"),
+            feature = "pre",
             forward(pre),
             assure(
                 "the content of `v` is valid UTF-8",
@@ -27,10 +27,10 @@ impl SecureString {
     }
 
     /// Mutably borrow the contents of the string.
-    #[cfg_attr(any(test, feature = "pre"), pre::pre)]
+    #[cfg_attr(feature = "pre", pre::pre)]
     pub fn unsecure_mut(&mut self) -> &mut str {
         #[cfg_attr(
-            any(test, feature = "pre"),
+            feature = "pre",
             forward(pre),
             assure(
                 "the content of `v` is valid UTF-8",
@@ -45,13 +45,13 @@ impl SecureString {
     }
 
     /// Turn the string into a regular `String` again.
-    #[cfg_attr(any(test, feature = "pre"), pre::pre)]
+    #[cfg_attr(feature = "pre", pre::pre)]
     pub fn into_unsecure(mut self) -> String {
         memlock::munlock(self.0.content.as_mut_ptr(), self.0.content.capacity());
         let content = std::mem::take(&mut self.0.content);
         std::mem::forget(self);
         #[cfg_attr(
-            any(test, feature = "pre"),
+            feature = "pre",
             forward(impl pre::std::string::String),
             assure(
                 "the content of `bytes` is valid UTF-8",

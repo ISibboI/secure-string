@@ -55,23 +55,6 @@ impl<T: Copy> Clone for SecureBox<T> {
     }
 }
 
-/// Overwrite the contents with zeros. This is automatically done in the destructor.
-///
-/// # Safety
-/// An all-zero byte-pattern must be a valid value of `T` in order for this function call to not be
-/// undefined behavior.
-#[cfg_attr(all(test, feature = "pre"), pre::pre("an all-zero byte-pattern is a valid value of `T`"))]
-pub(crate) unsafe fn zero_out_secure_box<T>(secure_box: &mut SecureBox<T>)
-where
-    T: Sized + Copy,
-{
-    std::slice::from_raw_parts_mut::<MaybeUninit<u8>>(
-        &mut **secure_box.content.as_mut().unwrap() as *mut T as *mut MaybeUninit<u8>,
-        std::mem::size_of::<T>(),
-    )
-    .zeroize();
-}
-
 // Delegate indexing
 impl<T, U> std::ops::Index<U> for SecureBox<T>
 where
@@ -107,7 +90,7 @@ impl<T> Drop for SecureBox<T>
 where
     T: Sized + Copy,
 {
-    #[cfg_attr(any(test, feature = "pre"), pre::pre)]
+    #[cfg_attr(feature = "pre", pre::pre)]
     fn drop(&mut self) {
         // Make sure that the box does not need to be dropped after this function, because it may
         // see an invalid type, if `T` does not support an all-zero byte-pattern
@@ -140,10 +123,10 @@ impl<T> PartialEq for SecureBox<T>
 where
     T: Sized + Copy + NoPaddingBytes,
 {
-    #[cfg_attr(any(test, feature = "pre"), pre::pre)]
+    #[cfg_attr(feature = "pre", pre::pre)]
     fn eq(&self, other: &SecureBox<T>) -> bool {
         #[cfg_attr(
-            any(test, feature = "pre"),
+            feature = "pre",
             assure(
                 valid_ptr(us, r),
                 reason = "`us` is created from a reference"
@@ -207,7 +190,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{zero_out_secure_box, SecureBox};
+    use std::mem::MaybeUninit;
+
+    use zeroize::Zeroize;
+
+    use super::SecureBox;
 
     const PRIVATE_KEY_1: [u8; 32] = [
         0xb0, 0x3b, 0x34, 0xc3, 0x3a, 0x1c, 0x44, 0xf2, 0x25, 0xb6, 0x62, 0xd2, 0xbf, 0x48, 0x59, 0xb8, 0x13, 0x54, 0x11, 0xfa,
@@ -219,8 +206,25 @@ mod tests {
         0xf7, 0xae, 0x36, 0x98, 0x87, 0x90, 0x21, 0xb9, 0x6b, 0xb4, 0xbf, 0x59,
     ];
 
+    /// Overwrite the contents with zeros. This is automatically done in the destructor.
+    ///
+    /// # Safety
+    /// An all-zero byte-pattern must be a valid value of `T` in order for this function call to not be
+    /// undefined behavior.
+    #[cfg_attr(feature = "pre", pre::pre("an all-zero byte-pattern is a valid value of `T`"))]
+    pub(crate) unsafe fn zero_out_secure_box<T>(secure_box: &mut SecureBox<T>)
+    where
+        T: Sized + Copy,
+    {
+        std::slice::from_raw_parts_mut::<MaybeUninit<u8>>(
+            &mut **secure_box.content.as_mut().unwrap() as *mut T as *mut MaybeUninit<u8>,
+            std::mem::size_of::<T>(),
+        )
+        .zeroize();
+    }
+
     #[test]
-    #[cfg_attr(any(test, feature = "pre"), pre::pre)]
+    #[cfg_attr(feature = "pre", pre::pre)]
     fn test_secure_box() {
         let key_1 = SecureBox::new(Box::new(PRIVATE_KEY_1));
         let key_2 = SecureBox::new(Box::new(PRIVATE_KEY_2));
@@ -232,7 +236,7 @@ mod tests {
 
         let mut final_key = key_1.clone();
         #[cfg_attr(
-            all(test, feature = "pre"),
+            feature = "pre",
             assure(
                 "an all-zero byte-pattern is a valid value of `T`",
                 reason = "`T` is `i32`, for which an all-zero byte-pattern is valid"

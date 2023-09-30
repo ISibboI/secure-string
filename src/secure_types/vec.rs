@@ -159,10 +159,10 @@ impl<T> PartialEq for SecureVec<T>
 where
     T: Sized + Copy + Zeroize + NoPaddingBytes,
 {
-    #[cfg_attr(any(test, feature = "pre"), pre::pre)]
+    #[cfg_attr(feature = "pre", pre::pre)]
     fn eq(&self, other: &SecureVec<T>) -> bool {
         #[cfg_attr(
-            any(test, feature = "pre"),
+            feature = "pre",
             assure(
                 valid_ptr(us, r),
                 reason = "`us` is created from a reference"
@@ -236,13 +236,13 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(any(test, feature = "pre"), pre::pre)]
+    #[cfg_attr(feature = "pre", pre::pre)]
     fn test_zero_out() {
         let mut my_sec = SecureBytes::from("hello");
         my_sec.zero_out();
         // `zero_out` sets the `len` to 0, here we reset it to check that the bytes were zeroed
         #[cfg_attr(
-            any(test, feature = "pre"),
+            feature = "pre",
             forward(impl pre::std::vec::Vec),
             assure(
                 new_len <= self.capacity(),
@@ -293,7 +293,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(any(test, feature = "pre"), pre::pre)]
+    #[cfg_attr(feature = "pre", pre::pre)]
     fn test_comparison_zero_out_mb() {
         let mbstring1 = SecureVec::from(vec!['H', 'a', 'l', 'l', 'o', ' ', '🦄', '!']);
         let mbstring2 = SecureVec::from(vec!['H', 'a', 'l', 'l', 'o', ' ', '🦄', '!']);
@@ -305,7 +305,7 @@ mod tests {
         mbstring.zero_out();
         // `zero_out` sets the `len` to 0, here we reset it to check that the bytes were zeroed
         #[cfg_attr(
-            any(test, feature = "pre"),
+            feature = "pre",
             forward(impl pre::std::vec::Vec),
             assure(
                 new_len <= self.capacity(),

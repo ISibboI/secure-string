@@ -1,6 +1,6 @@
 #[inline(never)]
 #[cfg_attr(
-        any(test, feature = "pre"),
+        feature = "pre",
         pre::pre(valid_ptr(us, r)),
         pre::pre("`us` points to a single allocated object of initialized `u8` values that is valid for `us_len` bytes"),
         pre::pre(us_len <= isize::MAX as usize),
@@ -18,7 +18,7 @@ pub unsafe fn timing_attack_proof_cmp(us: *const u8, us_len: usize, them: *const
     for i in 0..us_len {
         let us_val = {
             #[cfg_attr(
-                    any(test, feature = "pre"),
+                    feature = "pre",
                     forward(impl pre::std::const_pointer),
                     assure(
                         "the starting and the resulting pointer are in bounds of the same allocated object",
@@ -36,7 +36,7 @@ pub unsafe fn timing_attack_proof_cmp(us: *const u8, us_len: usize, them: *const
             #[allow(clippy::ptr_offset_with_cast)]
             let ptr = us.offset(i as isize);
             #[cfg_attr(
-                any(test, feature = "pre"),
+                feature = "pre",
                 forward(pre),
                 assure(
                     valid_ptr(src, r),
@@ -56,7 +56,7 @@ pub unsafe fn timing_attack_proof_cmp(us: *const u8, us_len: usize, them: *const
         };
         let them_val = {
             #[cfg_attr(
-                    any(test, feature = "pre"),
+                    feature = "pre",
                     forward(impl pre::std::const_pointer),
                     assure(
                         "the starting and the resulting pointer are in bounds of the same allocated object",
@@ -74,7 +74,7 @@ pub unsafe fn timing_attack_proof_cmp(us: *const u8, us_len: usize, them: *const
             #[allow(clippy::ptr_offset_with_cast)]
             let ptr = them.offset(i as isize);
             #[cfg_attr(
-                any(test, feature = "pre"),
+                feature = "pre",
                 forward(pre),
                 assure(
                     valid_ptr(src, r),
