@@ -48,6 +48,7 @@ mod mem {
                         reason = "a single allocation does not rely on overflow to index all elements and `i as isize >= 0`"
                     )
                 )]
+                #[allow(clippy::ptr_offset_with_cast)]
                 let ptr = us.offset(i as isize);
                 #[cfg_attr(
                     any(test, feature = "pre"),
@@ -85,6 +86,7 @@ mod mem {
                         reason = "a single allocation does not rely on overflow to index all elements and `i as isize >= 0`"
                     )
                 )]
+                #[allow(clippy::ptr_offset_with_cast)]
                 let ptr = them.offset(i as isize);
                 #[cfg_attr(
                     any(test, feature = "pre"),
@@ -157,6 +159,10 @@ mod private {
 /// Guarantees that there are no padding bytes in types implementing this trait.
 ///
 /// This trait is sealed and cannot be implemented outside of this crate.
+///
+/// # Safety
+///
+/// Only implement for types without padding bytes.
 pub unsafe trait NoPaddingBytes: private::Sealed {}
 
 macro_rules! impl_no_padding_bytes {
@@ -177,13 +183,13 @@ impl<T: NoPaddingBytes, const N: usize> private::Sealed for [T; N] {}
 unsafe impl<T: NoPaddingBytes, const N: usize> NoPaddingBytes for [T; N] {}
 
 /// Type alias for a vector that stores just bytes
-pub type SecStr = SecVec<u8>;
+pub type SecureBytes = SecureVec<u8>;
 
 /// Wrapper for a vector that stores a valid UTF-8 string
 #[derive(Clone, Eq)]
-pub struct SecUtf8(SecVec<u8>);
+pub struct SecureString(SecureVec<u8>);
 
-impl SecUtf8 {
+impl SecureString {
     /// Borrow the contents of the string.
     #[cfg_attr(any(test, feature = "pre"), pre::pre)]
     pub fn unsecure(&self) -> &str {
@@ -192,7 +198,7 @@ impl SecUtf8 {
             forward(pre),
             assure(
                 "the content of `v` is valid UTF-8",
-                reason = "it is not possible to create a `SecUtf8` with invalid UTF-8 content
+                reason = "it is not possible to create a `SecureString` with invalid UTF-8 content
                 and it is also not possible to modify the content as non-UTF-8 directly, so
                 they must still be valid UTF-8 here"
             )
@@ -210,7 +216,7 @@ impl SecUtf8 {
             forward(pre),
             assure(
                 "the content of `v` is valid UTF-8",
-                reason = "it is not possible to create a `SecUtf8` with invalid UTF-8 content
+                reason = "it is not possible to create a `SecureString` with invalid UTF-8 content
                 and it is also not possible to modify the content as non-UTF-8 directly, so
                 they must still be valid UTF-8 here"
             )
@@ -224,14 +230,14 @@ impl SecUtf8 {
     #[cfg_attr(any(test, feature = "pre"), pre::pre)]
     pub fn into_unsecure(mut self) -> String {
         memlock::munlock(self.0.content.as_mut_ptr(), self.0.content.capacity());
-        let content = std::mem::replace(&mut self.0.content, Vec::new());
+        let content = std::mem::take(&mut self.0.content);
         std::mem::forget(self);
         #[cfg_attr(
             any(test, feature = "pre"),
             forward(impl pre::std::string::String),
             assure(
                 "the content of `bytes` is valid UTF-8",
-                reason = "it is not possible to create a `SecUtf8` with invalid UTF-8 content
+                reason = "it is not possible to create a `SecureString` with invalid UTF-8 content
                 and it is also not possible to modify the content as non-UTF-8 directly, so
                 they must still be valid UTF-8 here"
             )
@@ -242,44 +248,44 @@ impl SecUtf8 {
     }
 }
 
-impl PartialEq for SecUtf8 {
-    fn eq(&self, other: &SecUtf8) -> bool {
-        // use implementation of SecVec
+impl PartialEq for SecureString {
+    fn eq(&self, other: &SecureString) -> bool {
+        // use implementation of SecureVec
         self.0 == other.0
     }
 }
 
-impl fmt::Debug for SecUtf8 {
+impl fmt::Debug for SecureString {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("***SECRET***").map_err(|_| fmt::Error)
     }
 }
 
-impl fmt::Display for SecUtf8 {
+impl fmt::Display for SecureString {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("***SECRET***").map_err(|_| fmt::Error)
     }
 }
 
-impl<U> From<U> for SecUtf8
+impl<U> From<U> for SecureString
 where
     U: Into<String>,
 {
-    fn from(s: U) -> SecUtf8 {
-        SecUtf8(SecVec::new(s.into().into_bytes()))
+    fn from(s: U) -> SecureString {
+        SecureString(SecureVec::new(s.into().into_bytes()))
     }
 }
 
-impl FromStr for SecUtf8 {
+impl FromStr for SecureString {
     type Err = std::convert::Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(SecUtf8(SecVec::new(s.into())))
+        Ok(SecureString(SecureVec::new(s.into())))
     }
 }
 
 #[cfg(feature = "serde")]
-impl serde::Serialize for SecUtf8 {
+impl serde::Serialize for SecureString {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -289,14 +295,14 @@ impl serde::Serialize for SecUtf8 {
 }
 
 #[cfg(feature = "serde")]
-impl<'de> serde::Deserialize<'de> for SecUtf8 {
-    fn deserialize<D>(deserializer: D) -> Result<SecUtf8, D::Error>
+impl<'de> serde::Deserialize<'de> for SecureString {
+    fn deserialize<D>(deserializer: D) -> Result<SecureString, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        struct SecUtf8Visitor;
-        impl<'de> serde::de::Visitor<'de> for SecUtf8Visitor {
-            type Value = SecUtf8;
+        struct SecureStringVisitor;
+        impl<'de> serde::de::Visitor<'de> for SecureStringVisitor {
+            type Value = SecureString;
             fn expecting(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
                 write!(formatter, "an utf-8 encoded string")
             }
@@ -304,10 +310,10 @@ impl<'de> serde::Deserialize<'de> for SecUtf8 {
             where
                 E: serde::de::Error,
             {
-                Ok(SecUtf8::from(v.to_string()))
+                Ok(SecureString::from(v.to_string()))
             }
         }
-        deserializer.deserialize_string(SecUtf8Visitor)
+        deserializer.deserialize_string(SecureStringVisitor)
     }
 }
 
@@ -321,22 +327,22 @@ impl<'de> serde::Deserialize<'de> for SecUtf8 {
 ///
 /// Comparisons using the `PartialEq` implementation are undefined behavior (and most likely wrong) if `T` has any padding bytes.
 ///
-/// Be careful with `SecStr::from`: if you have a borrowed string, it will be copied.
-/// Use `SecStr::new` if you have a `Vec<u8>`.
-pub struct SecVec<T>
+/// Be careful with `SecureBytes::from`: if you have a borrowed string, it will be copied.
+/// Use `SecureBytes::new` if you have a `Vec<u8>`.
+pub struct SecureVec<T>
 where
     T: Sized + Copy + Zeroize,
 {
     content: Vec<T>,
 }
 
-impl<T> SecVec<T>
+impl<T> SecureVec<T>
 where
     T: Sized + Copy + Zeroize,
 {
     pub fn new(mut cont: Vec<T>) -> Self {
         memlock::mlock(cont.as_mut_ptr(), cont.capacity());
-        SecVec { content: cont }
+        SecureVec { content: cont }
     }
 
     /// Borrow the contents of the string.
@@ -349,7 +355,7 @@ where
         self.borrow_mut()
     }
 
-    /// Resizes the `SecVec` in-place so that len is equal to `new_len`.
+    /// Resizes the `SecureVec` in-place so that len is equal to `new_len`.
     ///
     /// If `new_len` is smaller the inner vector is truncated.
     /// If `new_len` is larger the inner vector will grow, placing `value` in all new cells.
@@ -383,33 +389,33 @@ where
     }
 }
 
-impl<T: Copy + Zeroize> Clone for SecVec<T> {
+impl<T: Copy + Zeroize> Clone for SecureVec<T> {
     fn clone(&self) -> Self {
         Self::new(self.content.clone())
     }
 }
 
 // Creation
-impl<T, U> From<U> for SecVec<T>
+impl<T, U> From<U> for SecureVec<T>
 where
     U: Into<Vec<T>>,
     T: Sized + Copy + Zeroize,
 {
-    fn from(s: U) -> SecVec<T> {
-        SecVec::new(s.into())
+    fn from(s: U) -> SecureVec<T> {
+        SecureVec::new(s.into())
     }
 }
 
-impl FromStr for SecVec<u8> {
+impl FromStr for SecureVec<u8> {
     type Err = std::convert::Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(SecVec::new(s.into()))
+        Ok(SecureVec::new(s.into()))
     }
 }
 
 // Vec item indexing
-impl<T, U> std::ops::Index<U> for SecVec<T>
+impl<T, U> std::ops::Index<U> for SecureVec<T>
 where
     T: Sized + Copy + Zeroize,
     Vec<T>: std::ops::Index<U>,
@@ -422,7 +428,7 @@ where
 }
 
 // Borrowing
-impl<T> Borrow<[T]> for SecVec<T>
+impl<T> Borrow<[T]> for SecureVec<T>
 where
     T: Sized + Copy + Zeroize,
 {
@@ -431,7 +437,7 @@ where
     }
 }
 
-impl<T> BorrowMut<[T]> for SecVec<T>
+impl<T> BorrowMut<[T]> for SecureVec<T>
 where
     T: Sized + Copy + Zeroize,
 {
@@ -441,7 +447,7 @@ where
 }
 
 // Overwrite memory with zeros when we're done
-impl<T> Drop for SecVec<T>
+impl<T> Drop for SecureVec<T>
 where
     T: Sized + Copy + Zeroize,
 {
@@ -452,12 +458,12 @@ where
 }
 
 // Constant time comparison
-impl<T> PartialEq for SecVec<T>
+impl<T> PartialEq for SecureVec<T>
 where
     T: Sized + Copy + Zeroize + NoPaddingBytes,
 {
     #[cfg_attr(any(test, feature = "pre"), pre::pre)]
-    fn eq(&self, other: &SecVec<T>) -> bool {
+    fn eq(&self, other: &SecureVec<T>) -> bool {
         #[cfg_attr(
             any(test, feature = "pre"),
             assure(
@@ -500,10 +506,10 @@ where
     }
 }
 
-impl<T> Eq for SecVec<T> where T: Sized + Copy + Zeroize + NoPaddingBytes {}
+impl<T> Eq for SecureVec<T> where T: Sized + Copy + Zeroize + NoPaddingBytes {}
 
 // Make sure sensitive information is not logged accidentally
-impl<T> fmt::Debug for SecVec<T>
+impl<T> fmt::Debug for SecureVec<T>
 where
     T: Sized + Copy + Zeroize,
 {
@@ -512,7 +518,7 @@ where
     }
 }
 
-impl<T> fmt::Display for SecVec<T>
+impl<T> fmt::Display for SecureVec<T>
 where
     T: Sized + Copy + Zeroize,
 {
@@ -526,27 +532,27 @@ struct BytesVisitor;
 
 #[cfg(feature = "serde")]
 impl<'de> Visitor<'de> for BytesVisitor {
-    type Value = SecVec<u8>;
+    type Value = SecureVec<u8>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("a byte array or a sequence of bytes")
     }
 
-    fn visit_bytes<E>(self, value: &[u8]) -> Result<SecVec<u8>, E>
+    fn visit_bytes<E>(self, value: &[u8]) -> Result<SecureVec<u8>, E>
     where
         E: de::Error,
     {
-        Ok(SecStr::from(value))
+        Ok(SecureBytes::from(value))
     }
 
-    fn visit_byte_buf<E>(self, value: Vec<u8>) -> Result<SecVec<u8>, E>
+    fn visit_byte_buf<E>(self, value: Vec<u8>) -> Result<SecureVec<u8>, E>
     where
         E: de::Error,
     {
-        Ok(SecStr::from(value))
+        Ok(SecureBytes::from(value))
     }
 
-    fn visit_seq<A>(self, mut seq: A) -> Result<SecVec<u8>, A::Error>
+    fn visit_seq<A>(self, mut seq: A) -> Result<SecureVec<u8>, A::Error>
     where
         A: de::SeqAccess<'de>,
     {
@@ -556,13 +562,13 @@ impl<'de> Visitor<'de> for BytesVisitor {
             value.push(element);
         }
 
-        Ok(SecStr::from(value))
+        Ok(SecureBytes::from(value))
     }
 }
 
 #[cfg(feature = "serde")]
-impl<'de> Deserialize<'de> for SecVec<u8> {
-    fn deserialize<D>(deserializer: D) -> Result<SecVec<u8>, D::Error>
+impl<'de> Deserialize<'de> for SecureVec<u8> {
+    fn deserialize<D>(deserializer: D) -> Result<SecureVec<u8>, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -571,7 +577,7 @@ impl<'de> Deserialize<'de> for SecVec<u8> {
 }
 
 #[cfg(feature = "serde")]
-impl Serialize for SecVec<u8> {
+impl Serialize for SecureVec<u8> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -589,7 +595,7 @@ impl Serialize for SecVec<u8> {
 /// - Automatic `madvise(MADV_NOCORE/MADV_DONTDUMP)` to protect against leaking into core dumps (FreeBSD, DragonflyBSD, Linux)
 ///
 /// Comparisons using the `PartialEq` implementation are undefined behavior (and most likely wrong) if `T` has any padding bytes.
-pub struct SecBox<T>
+pub struct SecureBox<T>
 where
     T: Sized + Copy,
 {
@@ -598,13 +604,13 @@ where
     content: Option<Box<T>>,
 }
 
-impl<T> SecBox<T>
+impl<T> SecureBox<T>
 where
     T: Sized + Copy,
 {
     pub fn new(mut cont: Box<T>) -> Self {
         memlock::mlock(&mut cont, 1);
-        SecBox { content: Some(cont) }
+        SecureBox { content: Some(cont) }
     }
 
     /// Borrow the contents of the string.
@@ -618,7 +624,7 @@ where
     }
 }
 
-impl<T: Copy> Clone for SecBox<T> {
+impl<T: Copy> Clone for SecureBox<T> {
     fn clone(&self) -> Self {
         Self::new(self.content.clone().unwrap())
     }
@@ -630,19 +636,19 @@ impl<T: Copy> Clone for SecBox<T> {
 /// An all-zero byte-pattern must be a valid value of `T` in order for this function call to not be
 /// undefined behavior.
 #[cfg_attr(any(test, feature = "pre"), pre::pre("an all-zero byte-pattern is a valid value of `T`"))]
-pub unsafe fn zero_out_secbox<T>(secbox: &mut SecBox<T>)
+pub unsafe fn zero_out_secure_box<T>(secure_box: &mut SecureBox<T>)
 where
     T: Sized + Copy,
 {
     std::slice::from_raw_parts_mut::<MaybeUninit<u8>>(
-        &mut **secbox.content.as_mut().unwrap() as *mut T as *mut MaybeUninit<u8>,
+        &mut **secure_box.content.as_mut().unwrap() as *mut T as *mut MaybeUninit<u8>,
         std::mem::size_of::<T>(),
     )
     .zeroize();
 }
 
 // Delegate indexing
-impl<T, U> std::ops::Index<U> for SecBox<T>
+impl<T, U> std::ops::Index<U> for SecureBox<T>
 where
     T: std::ops::Index<U> + Sized + Copy,
 {
@@ -654,7 +660,7 @@ where
 }
 
 // Borrowing
-impl<T> Borrow<T> for SecBox<T>
+impl<T> Borrow<T> for SecureBox<T>
 where
     T: Sized + Copy,
 {
@@ -662,7 +668,7 @@ where
         self.content.as_ref().unwrap()
     }
 }
-impl<T> BorrowMut<T> for SecBox<T>
+impl<T> BorrowMut<T> for SecureBox<T>
 where
     T: Sized + Copy,
 {
@@ -672,7 +678,7 @@ where
 }
 
 // Overwrite memory with zeros when we're done
-impl<T> Drop for SecBox<T>
+impl<T> Drop for SecureBox<T>
 where
     T: Sized + Copy,
 {
@@ -705,12 +711,12 @@ where
 }
 
 // Constant time comparison
-impl<T> PartialEq for SecBox<T>
+impl<T> PartialEq for SecureBox<T>
 where
     T: Sized + Copy + NoPaddingBytes,
 {
     #[cfg_attr(any(test, feature = "pre"), pre::pre)]
-    fn eq(&self, other: &SecBox<T>) -> bool {
+    fn eq(&self, other: &SecureBox<T>) -> bool {
         #[cfg_attr(
             any(test, feature = "pre"),
             assure(
@@ -753,10 +759,10 @@ where
     }
 }
 
-impl<T> Eq for SecBox<T> where T: Sized + Copy + NoPaddingBytes {}
+impl<T> Eq for SecureBox<T> where T: Sized + Copy + NoPaddingBytes {}
 
 // Make sure sensitive information is not logged accidentally
-impl<T> fmt::Debug for SecBox<T>
+impl<T> fmt::Debug for SecureBox<T>
 where
     T: Sized + Copy,
 {
@@ -764,7 +770,7 @@ where
         f.write_str("***SECRET***").map_err(|_| fmt::Error)
     }
 }
-impl<T> fmt::Display for SecBox<T>
+impl<T> fmt::Display for SecureBox<T>
 where
     T: Sized + Copy,
 {
@@ -775,19 +781,19 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{zero_out_secbox, SecBox, SecStr, SecVec};
+    use super::{zero_out_secure_box, SecureBox, SecureBytes, SecureVec};
 
     #[test]
     fn test_basic() {
-        let my_sec = SecStr::from("hello");
-        assert_eq!(my_sec, SecStr::from("hello".to_string()));
+        let my_sec = SecureBytes::from("hello");
+        assert_eq!(my_sec, SecureBytes::from("hello".to_string()));
         assert_eq!(my_sec.unsecure(), b"hello");
     }
 
     #[test]
     #[cfg_attr(any(test, feature = "pre"), pre::pre)]
     fn test_zero_out() {
-        let mut my_sec = SecStr::from("hello");
+        let mut my_sec = SecureBytes::from("hello");
         my_sec.zero_out();
         // `zero_out` sets the `len` to 0, here we reset it to check that the bytes were zeroed
         #[cfg_attr(
@@ -811,7 +817,7 @@ mod tests {
 
     #[test]
     fn test_resize() {
-        let mut my_sec = SecVec::from([0, 1]);
+        let mut my_sec = SecureVec::from([0, 1]);
         assert_eq!(my_sec.unsecure().len(), 2);
         my_sec.resize(1, 0);
         assert_eq!(my_sec.unsecure().len(), 1);
@@ -821,32 +827,32 @@ mod tests {
 
     #[test]
     fn test_comparison() {
-        assert_eq!(SecStr::from("hello"), SecStr::from("hello"));
-        assert!(SecStr::from("hello") != SecStr::from("yolo"));
-        assert!(SecStr::from("hello") != SecStr::from("olleh"));
-        assert!(SecStr::from("hello") != SecStr::from("helloworld"));
-        assert!(SecStr::from("hello") != SecStr::from(""));
+        assert_eq!(SecureBytes::from("hello"), SecureBytes::from("hello"));
+        assert!(SecureBytes::from("hello") != SecureBytes::from("yolo"));
+        assert!(SecureBytes::from("hello") != SecureBytes::from("olleh"));
+        assert!(SecureBytes::from("hello") != SecureBytes::from("helloworld"));
+        assert!(SecureBytes::from("hello") != SecureBytes::from(""));
     }
 
     #[test]
     fn test_indexing() {
-        let string = SecStr::from("hello");
-        assert_eq!(string[0], 'h' as u8);
+        let string = SecureBytes::from("hello");
+        assert_eq!(string[0], b'h');
         assert_eq!(&string[3..5], "lo".as_bytes());
     }
 
     #[test]
     fn test_show() {
-        assert_eq!(format!("{:?}", SecStr::from("hello")), "***SECRET***".to_string());
-        assert_eq!(format!("{}", SecStr::from("hello")), "***SECRET***".to_string());
+        assert_eq!(format!("{:?}", SecureBytes::from("hello")), "***SECRET***".to_string());
+        assert_eq!(format!("{}", SecureBytes::from("hello")), "***SECRET***".to_string());
     }
 
     #[test]
     #[cfg_attr(any(test, feature = "pre"), pre::pre)]
     fn test_comparison_zero_out_mb() {
-        let mbstring1 = SecVec::from(vec!['H', 'a', 'l', 'l', 'o', ' ', '🦄', '!']);
-        let mbstring2 = SecVec::from(vec!['H', 'a', 'l', 'l', 'o', ' ', '🦄', '!']);
-        let mbstring3 = SecVec::from(vec!['!', '🦄', ' ', 'o', 'l', 'l', 'a', 'H']);
+        let mbstring1 = SecureVec::from(vec!['H', 'a', 'l', 'l', 'o', ' ', '🦄', '!']);
+        let mbstring2 = SecureVec::from(vec!['H', 'a', 'l', 'l', 'o', ' ', '🦄', '!']);
+        let mbstring3 = SecureVec::from(vec!['!', '🦄', ' ', 'o', 'l', 'l', 'a', 'H']);
         assert!(mbstring1 == mbstring2);
         assert!(mbstring1 != mbstring3);
 
@@ -884,10 +890,10 @@ mod tests {
 
     #[test]
     #[cfg_attr(any(test, feature = "pre"), pre::pre)]
-    fn test_secbox() {
-        let key_1 = SecBox::new(Box::new(PRIVATE_KEY_1));
-        let key_2 = SecBox::new(Box::new(PRIVATE_KEY_2));
-        let key_3 = SecBox::new(Box::new(PRIVATE_KEY_1));
+    fn test_secure_box() {
+        let key_1 = SecureBox::new(Box::new(PRIVATE_KEY_1));
+        let key_2 = SecureBox::new(Box::new(PRIVATE_KEY_2));
+        let key_3 = SecureBox::new(Box::new(PRIVATE_KEY_1));
         assert!(key_1 == key_1);
         assert!(key_1 != key_2);
         assert!(key_2 != key_3);
@@ -902,7 +908,7 @@ mod tests {
             )
         )]
         unsafe {
-            zero_out_secbox(&mut final_key)
+            zero_out_secure_box(&mut final_key)
         };
         assert_eq!(final_key.unsecure(), &[0; 32]);
     }
@@ -911,7 +917,7 @@ mod tests {
     #[test]
     fn test_serialization() {
         use serde_cbor::{from_slice, to_vec};
-        let my_sec = SecStr::from("hello");
+        let my_sec = SecureBytes::from("hello");
         let my_cbor = to_vec(&my_sec).unwrap();
         assert_eq!(my_cbor, b"\x45hello");
         let my_sec2 = from_slice(&my_cbor).unwrap();
@@ -921,12 +927,12 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_serde_json() {
-        let secure_bytes = SecVec::from("abc".as_bytes());
+        let secure_bytes = SecureVec::from("abc".as_bytes());
 
         let json = serde_json::to_string_pretty(secure_bytes.unsecure()).unwrap();
         println!("json = {json}");
 
-        let secure_bytes_serde: SecVec<u8> = serde_json::from_str(&json).unwrap();
+        let secure_bytes_serde: SecureVec<u8> = serde_json::from_str(&json).unwrap();
 
         assert_eq!(secure_bytes, secure_bytes_serde);
     }
