@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    paths:
+      # Run if workflow changes
+      - '.github/workflows/ci.yml'
+      # Run on changed dependencies
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '**/rust-toolchain.toml'
+      # Run on changed source files
+      - 'src/**'
+      - 'src/**'
+    branches: main
+  pull_request:
+    branches: main
+  # Sometimes the rules above don't match even though they should.
+  # This allows us to run the workflow manually anyways.
+  workflow_dispatch:
+
+env:
+  RUSTFLAGS: "-Dwarnings"
+
+jobs:
+  rust_check:
+    name: Rust check
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: true
+      matrix:
+        features: ["", "--all-features"]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: cargo check
+        run: cargo check --lib --tests ${{matrix.features}}
+
+  rust_format:
+    name: Rust format
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: true
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with: 
+          components: rustfmt
+
+      - name: cargo format
+        uses: actions-rust-lang/rustfmt@v1
+
+  rust_lint:
+    name: Rust lint
+    runs-on: ubuntu-latest
+    needs: ["rust_check", "rust_format"]
+
+    strategy:
+      fail-fast: true
+      matrix:
+        toolchain: [null, "stable", "beta", "nightly"]
+        features: ["", "--all-features"]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with: 
+          components: clippy
+          toolchain: ${{matrix.toolchain}}
+
+      - name: cargo clippy
+        run: cargo clippy --lib --tests ${{matrix.features}}
+
+  rust_test:
+    name: Rust test
+    runs-on: ubuntu-latest
+    needs: ["rust_check", "rust_lint"]
+
+    strategy:
+      fail-fast: true
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: cargo test
+        run: cargo test --all-features
