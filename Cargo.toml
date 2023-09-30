@@ -17,10 +17,10 @@ name = "secstr"
 libc = "0.2.148"
 zeroize = { version = "1.6.0", features = ["std"] }
 libsodium-sys = { version = "0.2.7", optional = true }
-pre = { version = "=0.2", optional = true }
+pre = { version = "0.2.1", optional = true }
 serde = { version = "1.0.188", optional = true }
 
 [dev-dependencies]
-pre = "=0.2"
+pre = "0.2.1"
 serde_cbor = "0.11"
 serde_json = "1.0.105"
