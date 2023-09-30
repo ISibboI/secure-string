@@ -68,6 +68,19 @@ where
     }
 }
 
+impl<T, const LENGTH: usize> TryFrom<Vec<T>> for SecureArray<T, LENGTH>
+where
+    T: Sized + Copy + Zeroize,
+{
+    type Error = String;
+
+    fn try_from(s: Vec<T>) -> Result<Self, Self::Error> {
+        Ok(Self::new(s.try_into().map_err(|error: Vec<T>| {
+            format!("length mismatch: expected {LENGTH}, but got {}", error.len())
+        })?))
+    }
+}
+
 impl<const LENGTH: usize> FromStr for SecureArray<u8, LENGTH> {
     type Err = std::array::TryFromSliceError;
 

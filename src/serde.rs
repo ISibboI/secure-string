@@ -1,37 +1,50 @@
 use core::fmt;
-use std::borrow::Borrow;
+use std::{borrow::Borrow, marker::PhantomData};
 
 use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
-use crate::{SecureBytes, SecureVec};
+use crate::{SecureArray, SecureVec};
 
-struct BytesVisitor;
+struct BytesVisitor<Value> {
+    phandom_data: PhantomData<Value>,
+}
 
-impl<'de> Visitor<'de> for BytesVisitor {
-    type Value = SecureVec<u8>;
+impl<Value> Default for BytesVisitor<Value> {
+    fn default() -> Self {
+        Self { phandom_data: Default::default() }
+    }
+}
+
+impl<'de, SecureValue: TryFrom<Vec<u8>>> Visitor<'de> for BytesVisitor<SecureValue>
+where
+    SecureValue::Error: std::fmt::Display,
+{
+    type Value = SecureValue;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("a byte array or a sequence of bytes")
     }
 
-    fn visit_bytes<E>(self, value: &[u8]) -> Result<SecureVec<u8>, E>
+    fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
     where
         E: de::Error,
     {
-        Ok(SecureBytes::from(value))
+        Self::Value::try_from(value.to_vec())
+            .map_err(|error| serde::de::Error::custom(format!("cannot construct secure value from byte slice: {error}")))
     }
 
-    fn visit_byte_buf<E>(self, value: Vec<u8>) -> Result<SecureVec<u8>, E>
+    fn visit_byte_buf<E>(self, value: Vec<u8>) -> Result<Self::Value, E>
     where
         E: de::Error,
     {
-        Ok(SecureBytes::from(value))
+        Self::Value::try_from(value)
+            .map_err(|error| serde::de::Error::custom(format!("cannot construct secure value from byte vector: {error}")))
     }
 
-    fn visit_seq<A>(self, mut seq: A) -> Result<SecureVec<u8>, A::Error>
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
     where
         A: de::SeqAccess<'de>,
     {
@@ -41,7 +54,8 @@ impl<'de> Visitor<'de> for BytesVisitor {
             value.push(element);
         }
 
-        Ok(SecureBytes::from(value))
+        Self::Value::try_from(value)
+            .map_err(|error| serde::de::Error::custom(format!("cannot construct secure value from byte sequence: {error}")))
     }
 }
 
@@ -50,7 +64,7 @@ impl<'de> Deserialize<'de> for SecureVec<u8> {
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_bytes(BytesVisitor)
+        deserializer.deserialize_bytes(BytesVisitor::default())
     }
 }
 
@@ -63,22 +77,48 @@ impl Serialize for SecureVec<u8> {
     }
 }
 
+impl<'de, const LENGTH: usize> Deserialize<'de> for SecureArray<u8, LENGTH> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_bytes(BytesVisitor::default())
+    }
+}
+
+impl<const LENGTH: usize> Serialize for SecureArray<u8, LENGTH> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_bytes(self.content.borrow())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{SecureBytes, SecureVec};
+    use std::str::FromStr;
 
-    #[cfg(feature = "serde")]
+    use crate::{SecureArray, SecureBytes, SecureVec};
+
     #[test]
-    fn test_serialization() {
-        use serde_cbor::{from_slice, to_vec};
-        let my_sec = SecureBytes::from("hello");
-        let my_cbor = to_vec(&my_sec).unwrap();
-        assert_eq!(my_cbor, b"\x45hello");
-        let my_sec2 = from_slice(&my_cbor).unwrap();
-        assert_eq!(my_sec, my_sec2);
+    fn test_cbor_vec() {
+        let data = SecureBytes::from("hello");
+        let cbor = serde_cbor::to_vec(&data).unwrap();
+        assert_eq!(cbor, b"\x45hello");
+        let deserialised = serde_cbor::from_slice(&cbor).unwrap();
+        assert_eq!(data, deserialised);
     }
 
-    #[cfg(feature = "serde")]
+    #[test]
+    fn test_cbor_array() {
+        let data: SecureArray<_, 5> = SecureArray::from_str("hello").unwrap();
+        let cbor = serde_cbor::to_vec(&data).unwrap();
+        assert_eq!(cbor, b"\x45hello");
+        let deserialised = serde_cbor::from_slice(&cbor).unwrap();
+        assert_eq!(data, deserialised);
+    }
+
     #[test]
     fn test_serde_json() {
         let secure_bytes = SecureVec::from("abc".as_bytes());
