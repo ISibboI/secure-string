@@ -39,3 +39,7 @@ impl_no_padding_bytes! {
 
 impl<T: NoPaddingBytes, const N: usize> private::Sealed for [T; N] {}
 unsafe impl<T: NoPaddingBytes, const N: usize> NoPaddingBytes for [T; N] {}
+
+#[doc = include_str!("../README.md")]
+#[cfg(doctest)]
+pub struct ReadmeDoctests;

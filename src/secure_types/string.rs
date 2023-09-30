@@ -64,6 +64,13 @@ impl SecureString {
             String::from_utf8_unchecked(content)
         }
     }
+
+    /// Overwrite the string with zeros. This is automatically called in the destructor.
+    ///
+    /// This also sets the length to `0`.
+    pub fn zero_out(&mut self) {
+        self.0.zero_out()
+    }
 }
 
 impl PartialEq for SecureString {

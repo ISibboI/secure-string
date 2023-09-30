@@ -10,9 +10,6 @@ repository = "https://github.com/ISibboI/secure-string"
 documentation = "https://docs.rs/secure-string/"
 edition = "2021"
 
-[lib]
-name = "secstr"
-
 [dependencies]
 libc = "0.2.148"
 zeroize = { version = "1.6.0", features = ["std"] }

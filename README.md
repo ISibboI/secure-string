@@ -44,7 +44,7 @@ let text_to_print = format!("{}", SecureString::from("hello")); // "***SECRET***
 let mut my_sec = SecureString::from("hello");
 my_sec.zero_out();
 // (It also sets the length to 0)
-assert_eq!(my_sec.unsecure(), b"");
+assert_eq!(my_sec.unsecure(), "");
 ```
 
 Be careful with `SecureString::from`: if you have a borrowed string, it will be copied.  

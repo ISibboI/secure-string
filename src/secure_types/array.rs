@@ -226,10 +226,7 @@ mod tests {
     #[test]
     fn test_comparison() {
         assert_eq!(SecureArray::<_, 5>::from_str("hello").unwrap(), SecureArray::from_str("hello").unwrap());
-        assert!(SecureArray::<_, 5>::from_str("hello").unwrap() != SecureArray::from_str("yolo").unwrap());
-        assert!(SecureArray::<_, 5>::from_str("hello").unwrap() != SecureArray::from_str("olleh").unwrap());
-        assert!(SecureArray::<_, 5>::from_str("hello").unwrap() != SecureArray::from_str("helloworld").unwrap());
-        assert!(SecureArray::<_, 5>::from_str("hello").unwrap() != SecureArray::from_str("").unwrap());
+        assert_ne!(SecureArray::<_, 5>::from_str("hello").unwrap(), SecureArray::from_str("olleh").unwrap());
     }
 
     #[test]
