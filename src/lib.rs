@@ -12,111 +12,7 @@ use std::{
 };
 use zeroize::Zeroize;
 
-/**
- * Obtain the number of bytes stored in the given byte slice
- */
-#[cfg(feature = "libsodium-sys")]
-fn size_of<T: Sized>(slice: &[T]) -> usize {
-    slice.len() * std::mem::size_of::<T>()
-}
-
-/**
- * Create a slice reference from the given box reference
- */
-#[cfg(feature = "libsodium-sys")]
-fn box_as_slice<T: Sized>(reference: &Box<T>) -> &[T] {
-    std::slice::from_ref(reference)
-}
-
-#[cfg(feature = "libsodium-sys")]
 mod mem {
-    extern crate libsodium_sys as sodium;
-    use crate::size_of;
-    use std;
-
-    #[inline(never)]
-    #[cfg_attr(
-        any(test, feature = "pre"),
-        pre::pre(valid_ptr(us, r)),
-        pre::pre("`us` points to a single allocated object of initialized `u8` values that is valid for `us_len` bytes"),
-        pre::pre(us_len <= isize::MAX as usize),
-        pre::pre(valid_ptr(them, r)),
-        pre::pre("`them` points to a single allocated object of initialized `u8` values that is valid for `them_len` bytes"),
-        pre::pre(them_len <= isize::MAX as usize)
-    )]
-    pub unsafe fn cmp(us: *const u8, us_len: usize, them: *const u8, them_len: usize) -> bool {
-        if us_len != them_len {
-            return false;
-        }
-
-        sodium::sodium_memcmp(us as *const _, them as *const _, them_len) == 0
-    }
-
-    #[cfg_attr(any(test, feature = "pre"), pre::pre)]
-    pub fn hash<T: Sized + Copy, H>(slice: &[T], state: &mut H)
-    where
-        H: std::hash::Hasher,
-    {
-        // Hash the private data
-        let mut hash = [0u8; sodium::crypto_hash_BYTES as _];
-        unsafe {
-            assert_eq!(
-                sodium::crypto_hash(&mut hash[0] as *mut _, slice.as_ptr() as *const _, size_of(slice) as u64),
-                0
-            );
-        };
-
-        // Hash again with the current internal state of the outer hasher added as "salt" (will include a per-thread random value for the default SipHasher)
-        let mut round2 = Vec::new();
-        {
-            #[cfg_attr(
-                any(test, feature = "pre"),
-                forward(pre),
-                assure(
-                    valid_ptr(data, r),
-                    reason = "the pointer is created from the reference `state`, which is guaranteed to be valid for reads"
-                ),
-                assure(
-                    proper_align(data),
-                    reason = "the type of the pointer is `u8` with alignment `1`, which every pointer is guaranteed to have"
-                ),
-                assure(
-                    "the allocated object at `data` is valid for `len * mem::size_of::<T>()` bytes",
-                    reason = "since `mem::size_of::<u8>() == 1`, the allocated object must be valid for
-                              `len == mem::size_of::<H>()` bytes, which it is guaranteed to be, because it is created from a
-                              reference to a value of `H`"
-                ),
-                assure(
-                    "the memory referenced by the returned slice is not mutated by any pointer for the duration of `'a`, except inside a contained `UnsafeCell`",
-                    reason = "the pointer is created from a mutable reference, so we have exlusive access to the value here
-                              and the returned slice is not modified either, so no pointer modifies the memory"
-                ),
-                assure(
-                    len * ::core::mem::size_of::<T>() <= isize::MAX as usize,
-                    reason = "`len * mem::size_of::<u8>() == mem::size_of::<H>()` and the compiler fails to compile types
-                              with a size greater than `isize::MAX`"
-                )
-            )]
-            let salt = unsafe { std::slice::from_raw_parts(state as *const H as *const u8, std::mem::size_of::<H>()) };
-            round2.reserve_exact(hash.len() + salt.len());
-            round2.extend_from_slice(&hash);
-            round2.extend_from_slice(salt);
-        };
-
-        let mut hash2 = [0u8; sodium::crypto_hash_BYTES as _];
-        unsafe {
-            assert_eq!(sodium::crypto_hash(&mut hash2[0] as *mut _, round2.as_ptr(), round2.len() as u64), 0);
-        };
-
-        // Use this final value as state
-        state.write(&hash2 as &[u8]);
-    }
-}
-
-#[cfg(not(feature = "libsodium-sys"))]
-mod mem {
-    use std;
-
     #[inline(never)]
     #[cfg_attr(
         any(test, feature = "pre"),
@@ -674,19 +570,6 @@ impl<'de> Deserialize<'de> for SecVec<u8> {
     }
 }
 
-#[cfg(feature = "libsodium-sys")]
-impl<T> std::hash::Hash for SecVec<T>
-where
-    T: Sized + Copy,
-{
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: std::hash::Hasher,
-    {
-        mem::hash(&self.content, state);
-    }
-}
-
 #[cfg(feature = "serde")]
 impl Serialize for SecVec<u8> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -890,19 +773,6 @@ where
     }
 }
 
-#[cfg(feature = "libsodium-sys")]
-impl<T> std::hash::Hash for SecBox<T>
-where
-    T: Sized + Copy,
-{
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: std::hash::Hasher,
-    {
-        mem::hash(box_as_slice(self.content.as_ref().unwrap()), state);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{zero_out_secbox, SecBox, SecStr, SecVec};
@@ -969,18 +839,6 @@ mod tests {
     fn test_show() {
         assert_eq!(format!("{:?}", SecStr::from("hello")), "***SECRET***".to_string());
         assert_eq!(format!("{}", SecStr::from("hello")), "***SECRET***".to_string());
-    }
-
-    #[cfg(feature = "libsodium-sys")]
-    #[test]
-    fn test_hashing() {
-        use std::hash::*;
-
-        let value = SecStr::from("hello");
-
-        let mut hasher = SipHasher::new(); // Variant of SipHasher that does not use random values
-        value.hash(&mut hasher);
-        assert_eq!(hasher.finish(), 12960579610752219549);
     }
 
     #[test]
