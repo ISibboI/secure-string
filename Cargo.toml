@@ -1,15 +1,14 @@
 [package]
 name = "secure-string"
 version = "0.1.0"
-authors = ["Val Packett <val@packett.cool>"]
+authors = ["Sebastian Schmidt <isibboi@gmail.com>"]
 keywords = ["Security", "Memory"]
 description = "A data type suitable for storing sensitive information such as passwords and private keys in memory, featuring constant time equality, mlock and zeroing out."
 license = "Unlicense"
 readme = "README.md"
-homepage = "https://codeberg.org/valpackett/secstr"
-repository = "https://codeberg.org/valpackett/secstr"
-documentation = "https://docs.rs/secstr/"
-edition = "2018"
+repository = "https://github.com/ISibboI/secure-string"
+documentation = "https://docs.rs/secure-string/"
+edition = "2021"
 
 [lib]
 name = "secstr"
