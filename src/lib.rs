@@ -3,6 +3,9 @@
 mod secure_types;
 mod secure_utils;
 
+#[cfg(feature = "serde")]
+mod serde;
+
 pub use secure_types::{boxed::SecureBox, string::SecureString, vec::SecureBytes, vec::SecureVec};
 
 mod private {

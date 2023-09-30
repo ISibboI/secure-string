@@ -11,9 +11,6 @@ use crate::{
     NoPaddingBytes,
 };
 
-#[cfg(feature = "serde")]
-mod serde;
-
 /// A data type suitable for storing sensitive information such as passwords and private keys in memory, that implements:
 ///
 /// - Automatic zeroing in `Drop`
