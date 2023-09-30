@@ -1,6 +1,6 @@
 [package]
 name = "secure-string"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Sebastian Schmidt <isibboi@gmail.com>"]
 keywords = ["Security", "Memory"]
 description = "A data type suitable for storing sensitive information such as passwords and private keys in memory, featuring constant time equality, mlock and zeroing out."
